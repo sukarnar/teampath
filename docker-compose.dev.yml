@@ -1,0 +1,43 @@
+# Local development without Traefik: docker compose -f docker-compose.dev.yml up --build
+# Then open http://localhost:8000
+name: teampath-dev
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: teampath
+      POSTGRES_USER: teampath_owner
+      POSTGRES_PASSWORD: devpassword
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [devpg:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teampath_owner -d teampath"]
+      interval: 5s
+      retries: 20
+
+  app:
+    build: { context: ., target: base }
+    command: ["web"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://teampath_app:devapppassword@db:5432/teampath
+      MIGRATION_DATABASE_URL: postgresql+psycopg://teampath_owner:devpassword@db:5432/teampath
+      APP_DB_PASSWORD: devapppassword
+      REQUIRE_ORG_APPROVAL: "false"
+      BASE_URL: http://localhost:8000
+    ports: ["127.0.0.1:8000:8000"]
+    volumes: [devdata:/data]
+    depends_on: { db: { condition: service_healthy } }
+
+  worker:
+    build: { context: ., target: worker }
+    command: ["worker"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://teampath_app:devapppassword@db:5432/teampath
+      MIGRATION_DATABASE_URL: postgresql+psycopg://teampath_owner:devpassword@db:5432/teampath
+    volumes: [devdata:/data]
+    depends_on: { app: { condition: service_healthy } }
+
+volumes:
+  devpg:
+  devdata:

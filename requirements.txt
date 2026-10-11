@@ -1,0 +1,21 @@
+# Runtime (pinned; update deliberately and run the test suite)
+flet==1.0.4
+flet-web==1.0.4
+fastapi==0.143.0
+uvicorn[standard]==0.54.0
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
+alembic==1.20.0
+pydantic==2.14.0
+pydantic-settings==2.15.0
+argon2-cffi==25.1.0
+cryptography==50.0.2
+PyOTP==2.10.0
+qrcode[pil]==8.2
+pillow==12.3.0
+pymupdf==1.28.2
+circlify==0.15.1
+httpx==0.28.1
+python-multipart==0.0.32
+email-validator==2.3.0
+tzdata==2026.5  # time zones even on minimal images

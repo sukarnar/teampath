@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install system packages (document previews)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libreoffice-writer
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check teampath tests --select E9,F63,F7,F82
+      - name: Tests (includes cross-tenant and hierarchy isolation tests)
+        run: pytest -q
+      - name: Dependency vulnerabilities
+        run: pip-audit -r requirements.txt --strict

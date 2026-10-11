@@ -1,0 +1,14 @@
+[project]
+name = "teampath"
+version = "0.1.0"
+description = "Multi-tenant onboarding, training and team-performance platform (Flet + FastAPI + Postgres)"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-p no:flet"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 120

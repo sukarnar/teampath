@@ -1,0 +1,83 @@
+# Production stack for a VPS that already runs Traefik (see README → Deploy).
+#   docker compose pull && docker compose up -d
+name: teampath
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: teampath
+      POSTGRES_USER: teampath_owner
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]          # never published to the host or the internet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U teampath_owner -d teampath"]
+      interval: 10s
+      retries: 10
+    security_opt: ["no-new-privileges:true"]
+
+  app:
+    image: ${APP_IMAGE:-ghcr.io/sukarnar/teampath}:${APP_TAG:-latest}
+    restart: unless-stopped
+    command: ["web"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://teampath_app:${APP_DB_PASSWORD}@db:5432/teampath
+      MIGRATION_DATABASE_URL: postgresql+psycopg://teampath_owner:${DB_OWNER_PASSWORD}@db:5432/teampath
+    volumes:
+      - appdata:/data
+    depends_on:
+      db: { condition: service_healthy }
+    networks: [internal, web]
+    read_only: true
+    tmpfs: ["/tmp"]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=${TRAEFIK_NETWORK:-traefik}
+      - traefik.http.routers.teampath.rule=Host(`${APP_DOMAIN:?set APP_DOMAIN in .env}`)
+      - traefik.http.routers.teampath.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
+      - traefik.http.routers.teampath.tls.certresolver=${TRAEFIK_CERTRESOLVER:-letsencrypt}
+      - traefik.http.routers.teampath.middlewares=teampath-ratelimit
+      - traefik.http.middlewares.teampath-ratelimit.ratelimit.average=60
+      - traefik.http.middlewares.teampath-ratelimit.ratelimit.burst=120
+      - traefik.http.services.teampath.loadbalancer.server.port=8000
+
+  worker:
+    image: ${WORKER_IMAGE:-ghcr.io/sukarnar/teampath-worker}:${APP_TAG:-latest}
+    restart: unless-stopped
+    command: ["worker"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://teampath_app:${APP_DB_PASSWORD}@db:5432/teampath
+      MIGRATION_DATABASE_URL: postgresql+psycopg://teampath_owner:${DB_OWNER_PASSWORD}@db:5432/teampath
+    volumes:
+      - appdata:/data
+    depends_on:
+      app: { condition: service_healthy }
+    networks: [internal]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: [ALL]
+
+  # Optional antivirus scanning of uploads: `docker compose --profile av up -d`
+  # and set CLAMD_HOST=clamav in .env.
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    profiles: ["av"]
+    networks: [internal]
+
+volumes:
+  pgdata:
+  appdata:
+
+networks:
+  internal:
+    internal: true
+  web:
+    name: ${TRAEFIK_NETWORK:-traefik}
+    external: true
